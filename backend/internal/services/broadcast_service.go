@@ -63,15 +63,28 @@ func (s *BroadcastService) NoteChanged(ctx context.Context, path string, note *m
 	s.send(ctx, conns, excludeConnectionID, NoteMessage(path, note))
 }
 
-// Presence sends the connection count of path to everyone on it except excludeConnectionID.
-func (s *BroadcastService) Presence(ctx context.Context, path string, excludeConnectionID string) (int, error) {
+// Presence sends the connection count of path to everyone on it except actorID.
+// The byPath GSI is eventually consistent, so a connection that just joined may be
+// missing from the query and one that just left may still be there: actorID is
+// forced in (present=true) or out (present=false) before counting.
+func (s *BroadcastService) Presence(ctx context.Context, path, actorID string, present bool) (int, error) {
 	conns, err := s.conns.ListByPath(ctx, path, s.now())
 	if err != nil {
 		return 0, err
 	}
-	payload, _ := json.Marshal(models.PresenceMessage{Type: "presence", Path: path, Count: len(conns)})
-	s.send(ctx, conns, excludeConnectionID, payload)
-	return len(conns), nil
+	others := make([]models.Connection, 0, len(conns))
+	for _, c := range conns {
+		if c.ConnectionID != actorID {
+			others = append(others, c)
+		}
+	}
+	count := len(others)
+	if present {
+		count++
+	}
+	payload, _ := json.Marshal(models.PresenceMessage{Type: "presence", Path: path, Count: count})
+	s.send(ctx, others, "", payload)
+	return count, nil
 }
 
 // Send posts a payload to a single connection, cleaning it up when it is gone.

@@ -53,7 +53,7 @@ func (s *connectionsService) Connect(ctx context.Context, connectionID, path str
 	if err != nil {
 		return err
 	}
-	if _, err := s.broadcast.Presence(ctx, path, connectionID); err != nil {
+	if _, err := s.broadcast.Presence(ctx, path, connectionID, true); err != nil {
 		slog.Warn("presence on connect", "path", path, "error", err)
 	}
 	return nil
@@ -68,7 +68,7 @@ func (s *connectionsService) Disconnect(ctx context.Context, connectionID string
 		return err
 	}
 	if conn != nil {
-		if _, err := s.broadcast.Presence(ctx, conn.Path, connectionID); err != nil {
+		if _, err := s.broadcast.Presence(ctx, conn.Path, connectionID, false); err != nil {
 			slog.Warn("presence on disconnect", "path", conn.Path, "error", err)
 		}
 	}
@@ -80,17 +80,17 @@ func (s *connectionsService) HandleMessage(ctx context.Context, connectionID, bo
 	if err := json.Unmarshal([]byte(body), &msg); err != nil || msg.Action != "ping" {
 		return nil
 	}
-	count := 0
 	conn, err := s.conns.Get(ctx, connectionID)
 	if err != nil {
 		return err
 	}
+	count := 1
 	if conn != nil {
-		conns, err := s.conns.ListByPath(ctx, conn.Path, s.now().UTC())
-		if err != nil {
+		// Re-announcing presence on every ping lets clients that joined at the same
+		// moment converge on the right count (see BroadcastService.Presence).
+		if count, err = s.broadcast.Presence(ctx, conn.Path, connectionID, true); err != nil {
 			return err
 		}
-		count = len(conns)
 	}
 	payload, _ := json.Marshal(models.PongMessage{Type: "pong", ConnectionID: connectionID, Count: count})
 	return s.broadcast.Send(ctx, connectionID, payload)

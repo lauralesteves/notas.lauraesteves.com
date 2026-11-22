@@ -119,5 +119,5 @@ Enviar logo ao abrir (para descobrir o próprio `connectionId`) e depois a cada 
 
 - `update` quando o corpo tem até **28.000 bytes**; acima disso vai `changed` e o cliente faz `GET`.
 - Nota apagada (corpo vazio): `update` com `version: 0`, `body: ""`, datas `null`.
-- `presence` vai para os outros da mesma nota quando alguém entra ou sai. `count` inclui todo mundo conectado na nota.
+- `presence` vai para os outros da mesma nota quando alguém entra, sai ou manda `ping` (o reenvio no `ping` corrige contagens erradas por causa do índice eventualmente consistente do DynamoDB). `count` inclui todo mundo conectado na nota.
 - Se o WebSocket não conectar, o cliente cai para polling (`GET ?since=`) a cada 5s, só com a aba visível.

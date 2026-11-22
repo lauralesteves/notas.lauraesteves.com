@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
+
+	"github.com/lauralesteves/notas.lauraesteves.com/backend/internal/models"
 
 	"github.com/lauralesteves/notas.lauraesteves.com/backend/internal/repositories"
 )
@@ -103,5 +106,65 @@ func TestPingOnGoneConnectionDeletesIt(t *testing.T) {
 	}
 	if c, _ := repo.Get(ctx, "a"); c != nil {
 		t.Errorf("gone connection kept")
+	}
+}
+
+// laggingConns simulates the eventually consistent byPath GSI: ListByPath returns
+// a fixed snapshot instead of the current table contents.
+type laggingConns struct {
+	*repositories.MemoryConnectionsRepository
+	snapshot []models.Connection
+}
+
+func (l *laggingConns) ListByPath(context.Context, string, time.Time) ([]models.Connection, error) {
+	return l.snapshot, nil
+}
+
+func newLaggingFixture(snapshot ...string) (*laggingConns, *fakeBroadcaster, ConnectionsService) {
+	repo := &laggingConns{MemoryConnectionsRepository: repositories.NewMemoryConnectionsRepository()}
+	for _, id := range snapshot {
+		c := models.Connection{ConnectionID: id, Path: "foo", ConnectedAt: baseTime, ExpiresAt: baseTime.Add(models.ConnectionTTL)}
+		_ = repo.Put(context.Background(), c)
+		repo.snapshot = append(repo.snapshot, c)
+	}
+	b := &fakeBroadcaster{gone: map[string]bool{}}
+	clock := (&fakeClock{t: baseTime}).Now
+	return repo, b, NewConnectionsService(repo, NewBroadcastService(repo, b, clock), clock)
+}
+
+func TestConnectCountsJoinerMissingFromIndex(t *testing.T) {
+	_, b, svc := newLaggingFixture("a")
+	_ = svc.Connect(context.Background(), "b", "foo")
+	msgs := b.to("a")
+	if len(msgs) != 1 || decode(t, msgs[0])["count"] != float64(2) {
+		t.Errorf("a should see 2 people, got %v", msgs)
+	}
+}
+
+func TestDisconnectIgnoresLeaverStillInIndex(t *testing.T) {
+	_, b, svc := newLaggingFixture("a", "b")
+	_ = svc.Disconnect(context.Background(), "b")
+	if len(b.to("b")) != 0 {
+		t.Errorf("leaver should not receive presence")
+	}
+	msgs := b.to("a")
+	if len(msgs) != 1 || decode(t, msgs[0])["count"] != float64(1) {
+		t.Errorf("a should see 1 person, got %v", msgs)
+	}
+}
+
+func TestPingReannouncesPresenceToOthers(t *testing.T) {
+	_, b, svc := newLaggingFixture("a")
+	ctx := context.Background()
+	_ = svc.Connect(ctx, "b", "foo")
+	_ = svc.HandleMessage(ctx, "b", `{"action":"ping"}`)
+
+	pong := b.to("b")
+	if len(pong) != 1 || decode(t, pong[0])["type"] != "pong" || decode(t, pong[0])["count"] != float64(2) {
+		t.Errorf("b pong = %v", pong)
+	}
+	msgs := b.to("a")
+	if len(msgs) != 2 || decode(t, msgs[1])["type"] != "presence" || decode(t, msgs[1])["count"] != float64(2) {
+		t.Errorf("a should get presence again on b's ping, got %v", msgs)
 	}
 }
