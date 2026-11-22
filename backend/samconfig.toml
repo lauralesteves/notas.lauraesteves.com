@@ -17,4 +17,5 @@ s3_prefix = "notas-lauraesteves"
 region = "us-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
+tags = "project=\"notas.lauraesteves.com\""
 image_repositories = []

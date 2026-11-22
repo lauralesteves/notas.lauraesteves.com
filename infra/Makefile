@@ -35,6 +35,7 @@ frontend: check-env
 		--stack-name $(STACK_NAME) \
 		--template-file frontend.yml \
 		--no-fail-on-empty-changeset \
+		--tags project=notas.lauraesteves.com \
 		--parameter-overrides \
 			DomainName=$(DOMAIN_NAME) \
 			ApiDomainName=$(API_DOMAIN_NAME) \
