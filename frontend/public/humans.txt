@@ -1,0 +1,13 @@
+/* TEAM */
+Creator: Laura Esteves
+Site: https://lauraesteves.com
+Contact: lauralesteves [at] gmail.com
+Location: São Paulo, Brasil
+
+/* SITE */
+Name: Notas
+URL: https://notas.lauraesteves.com
+Description: Bloco de notas colaborativo sem login. A URL é a nota.
+Standards: HTML5, CSS3, ECMAScript 2022
+Components: React 19, TypeScript, Tailwind CSS 4, Vite, Go, AWS Lambda, DynamoDB, API Gateway WebSocket
+Hosting: AWS S3 + CloudFront
