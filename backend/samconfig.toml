@@ -1,0 +1,20 @@
+version = 0.1
+
+[default.global.parameters]
+stack_name = "notas-lauraesteves"
+region = "us-east-1"
+
+[default.build.parameters]
+use_container = false
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+stack_name = "notas-lauraesteves"
+resolve_s3 = true
+s3_prefix = "notas-lauraesteves"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = []

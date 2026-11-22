@@ -1,0 +1,472 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: "AWS SAM template for notas.lauraesteves.com"
+
+Parameters:
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID for lauraesteves.com
+  CertificateArn:
+    Type: String
+    Description: ACM certificate ARN (us-east-1) covering *.notas.lauraesteves.com
+  MailFrom:
+    Type: String
+    Description: SES sender address for the weekly report (sent as "Cortex <MailFrom>")
+  ReportTo:
+    Type: String
+    Description: Recipient of the weekly report
+
+Globals:
+  Function:
+    Runtime: provided.al2023
+    Architectures: [ arm64 ]
+    Handler: bootstrap
+    MemorySize: 128
+    Timeout: 10
+    Environment:
+      Variables:
+        ENV: prod
+        NOTES_TABLE: !Ref NotesTable
+        CONNECTIONS_TABLE: !Ref ConnectionsTable
+
+Resources:
+
+  ######################################################################################################################
+  # TABLES
+  ######################################################################################################################
+
+  NotesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: notas-notes
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: path
+          AttributeType: S
+        - AttributeName: parent
+          AttributeType: S
+        - AttributeName: kind
+          AttributeType: S
+        - AttributeName: updatedAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: path
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: byParent
+          KeySchema:
+            - AttributeName: parent
+              KeyType: HASH
+            - AttributeName: path
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes: [ updatedAt, expiresAt ]
+        - IndexName: byUpdated
+          KeySchema:
+            - AttributeName: kind
+              KeyType: HASH
+            - AttributeName: updatedAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes: [ expiresAt ]
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+
+  ConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: notas-connections
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: connectionId
+          AttributeType: S
+        - AttributeName: path
+          AttributeType: S
+      KeySchema:
+        - AttributeName: connectionId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: byPath
+          KeySchema:
+            - AttributeName: path
+              KeyType: HASH
+          Projection:
+            ProjectionType: INCLUDE
+            NonKeyAttributes: [ ttl ]
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  ######################################################################################################################
+  # HTTP API
+  ######################################################################################################################
+
+  NotasHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Name: notas-http
+      CorsConfiguration:
+        AllowOrigins:
+          - https://notas.lauraesteves.com
+          - http://localhost:5173
+        AllowMethods: [ GET, PUT, OPTIONS ]
+        AllowHeaders: [ Content-Type, X-Connection-Id ]
+        MaxAge: 600
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 20
+        ThrottlingBurstLimit: 40
+      Domain:
+        DomainName: api.notas.lauraesteves.com
+        CertificateArn: !Ref CertificateArn
+        EndpointConfiguration: REGIONAL
+        Route53:
+          HostedZoneId: !Ref HostedZoneId
+
+  GetNoteFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: go1.x
+    Properties:
+      FunctionName: notas-api-notes-get
+      CodeUri: lambdas/api/notes/get
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref NotesTable
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotasHttpApi
+            Path: /notes/{path+}
+            Method: GET
+
+  SaveNoteFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: go1.x
+    Properties:
+      FunctionName: notas-api-notes-save
+      CodeUri: lambdas/api/notes/save
+      Timeout: 15
+      Environment:
+        Variables:
+          WS_MANAGEMENT_ENDPOINT: !Sub https://${WsApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref NotesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+        - Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WsApi}/prod/POST/@connections/*
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotasHttpApi
+            Path: /notes/{path+}
+            Method: PUT
+
+  GetChildrenFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: go1.x
+    Properties:
+      FunctionName: notas-api-children-get
+      CodeUri: lambdas/api/children/get
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref NotesTable
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotasHttpApi
+            Path: /children/{path+}
+            Method: GET
+
+  GetRawFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: go1.x
+    Properties:
+      FunctionName: notas-api-raw-get
+      CodeUri: lambdas/api/raw/get
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref NotesTable
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotasHttpApi
+            Path: /raw/{path+}
+            Method: GET
+
+  SaveRawFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: go1.x
+    Properties:
+      FunctionName: notas-api-raw-save
+      CodeUri: lambdas/api/raw/save
+      Timeout: 15
+      Environment:
+        Variables:
+          WS_MANAGEMENT_ENDPOINT: !Sub https://${WsApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref NotesTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+        - Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WsApi}/prod/POST/@connections/*
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref NotasHttpApi
+            Path: /raw/{path+}
+            Method: PUT
+
+  ######################################################################################################################
+  # WEBSOCKET API
+  ######################################################################################################################
+
+  WsApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: notas-ws
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+
+  WsConnectFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: go1.x
+    Properties:
+      FunctionName: notas-ws-connect
+      CodeUri: lambdas/ws/connect
+      Environment:
+        Variables:
+          WS_MANAGEMENT_ENDPOINT: !Sub https://${WsApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+        - Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WsApi}/prod/POST/@connections/*
+
+  WsDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: go1.x
+    Properties:
+      FunctionName: notas-ws-disconnect
+      CodeUri: lambdas/ws/disconnect
+      Environment:
+        Variables:
+          WS_MANAGEMENT_ENDPOINT: !Sub https://${WsApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+        - Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WsApi}/prod/POST/@connections/*
+
+  WsDefaultFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: go1.x
+    Properties:
+      FunctionName: notas-ws-default
+      CodeUri: lambdas/ws/default
+      Environment:
+        Variables:
+          WS_MANAGEMENT_ENDPOINT: !Sub https://${WsApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConnectionsTable
+        - Statement:
+            - Effect: Allow
+              Action: execute-api:ManageConnections
+              Resource: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WsApi}/prod/POST/@connections/*
+
+  WsConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WsApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WsConnectFunction.Arn}/invocations
+
+  WsDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WsApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WsDisconnectFunction.Arn}/invocations
+
+  WsDefaultIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WsApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WsDefaultFunction.Arn}/invocations
+
+  WsConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WsApi
+      RouteKey: $connect
+      AuthorizationType: NONE
+      OperationName: ConnectRoute
+      Target: !Sub integrations/${WsConnectIntegration}
+
+  WsDisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WsApi
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      OperationName: DisconnectRoute
+      Target: !Sub integrations/${WsDisconnectIntegration}
+
+  WsDefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WsApi
+      RouteKey: $default
+      AuthorizationType: NONE
+      OperationName: DefaultRoute
+      Target: !Sub integrations/${WsDefaultIntegration}
+
+  WsConnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref WsConnectFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WsApi}/*/$connect
+
+  WsDisconnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref WsDisconnectFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WsApi}/*/$disconnect
+
+  WsDefaultPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref WsDefaultFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WsApi}/*/$default
+
+  # Explicit deployment: WebSocket stages do not redeploy on their own, so bump the
+  # logical id (WsDeploymentV2, ...) whenever routes or integrations change.
+  WsDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - WsConnectRoute
+      - WsDisconnectRoute
+      - WsDefaultRoute
+    Properties:
+      ApiId: !Ref WsApi
+
+  WsStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref WsApi
+      StageName: prod
+      DeploymentId: !Ref WsDeployment
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 20
+        ThrottlingBurstLimit: 40
+
+  WsDomain:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: ws.notas.lauraesteves.com
+      DomainNameConfigurations:
+        - CertificateArn: !Ref CertificateArn
+          EndpointType: REGIONAL
+
+  WsApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    DependsOn: WsStage
+    Properties:
+      ApiId: !Ref WsApi
+      DomainName: !Ref WsDomain
+      Stage: prod
+
+  WsDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: ws.notas.lauraesteves.com
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt WsDomain.RegionalDomainName
+        HostedZoneId: !GetAtt WsDomain.RegionalHostedZoneId
+
+  ######################################################################################################################
+  # WORKERS
+  ######################################################################################################################
+
+  WeeklyReportFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: go1.x
+    Properties:
+      FunctionName: notas-weekly-report
+      CodeUri: lambdas/workers/report/weekly
+      Timeout: 60
+      Environment:
+        Variables:
+          MAIL_FROM: !Ref MailFrom
+          REPORT_TO: !Ref ReportTo
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref NotesTable
+        - Statement:
+            - Effect: Allow
+              Action: ses:SendEmail
+              Resource: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/lauraesteves.com
+      Events:
+        WeeklySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 12 ? * MON *)
+            Name: notas-weekly-report
+            Description: Mondays 9am BRT - weekly notes report by email
+            Enabled: true
+
+Outputs:
+  HttpApiId:
+    Description: HTTP API id
+    Value: !Ref NotasHttpApi
+  HttpApiEndpoint:
+    Description: Default execute-api endpoint of the HTTP API
+    Value: !Sub https://${NotasHttpApi}.execute-api.${AWS::Region}.amazonaws.com
+  HttpApiDomain:
+    Description: Custom domain of the HTTP API (CloudFront /raw/* origin)
+    Value: api.notas.lauraesteves.com
+  WsEndpoint:
+    Description: Public WebSocket URL
+    Value: wss://ws.notas.lauraesteves.com
+  WsApiEndpoint:
+    Description: Default execute-api WebSocket URL
+    Value: !Sub wss://${WsApi}.execute-api.${AWS::Region}.amazonaws.com/prod
+  WsManagementEndpoint:
+    Description: Endpoint used by the Lambdas to post to connections
+    Value: !Sub https://${WsApi}.execute-api.${AWS::Region}.amazonaws.com/prod
