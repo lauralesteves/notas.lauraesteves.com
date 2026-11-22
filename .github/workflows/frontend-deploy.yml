@@ -50,7 +50,7 @@ jobs:
             --exclude "favicon.svg" \
             --exclude "ai.txt" \
             --exclude "humans.txt" \
-            --exclude "og.png" \
+            --exclude "og.webp" \
             --exclude ".well-known/*"
 
       - name: Deploy HTML and metadata to S3 (short cache)
@@ -65,7 +65,7 @@ jobs:
             --include "favicon.svg" \
             --include "ai.txt" \
             --include "humans.txt" \
-            --include "og.png" \
+            --include "og.webp" \
             --include ".well-known/*"
 
       - name: Invalidate CloudFront cache

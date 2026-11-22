@@ -33,7 +33,7 @@ deploy: build
 		--exclude "favicon.svg" \
 		--exclude "ai.txt" \
 		--exclude "humans.txt" \
-		--exclude "og.png" \
+		--exclude "og.webp" \
 		--exclude ".well-known/*"
 	aws s3 sync dist/ s3://$(S3_BUCKET) \
 		--delete \
@@ -45,7 +45,7 @@ deploy: build
 		--include "favicon.svg" \
 		--include "ai.txt" \
 		--include "humans.txt" \
-		--include "og.png" \
+		--include "og.webp" \
 		--include ".well-known/*"
 	@echo "Invalidating CloudFront cache..."
 	aws cloudfront create-invalidation \
