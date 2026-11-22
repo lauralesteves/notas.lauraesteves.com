@@ -59,7 +59,7 @@ const ANNOUNCED: ReadonlySet<SyncStatus> = new Set([
   'error',
 ]);
 
-/** Small, muted indicator in the bottom-right corner. No links, no chrome. */
+/** Small, muted indicator in the bottom-left corner. No links, no chrome. */
 export function StatusBar({ status, presence, expiresAt }: StatusBarProps) {
   const label = statusLabel(status);
   const expiry = expiresAt ? formatExpiry(expiresAt) : null;
@@ -69,7 +69,7 @@ export function StatusBar({ status, presence, expiresAt }: StatusBarProps) {
   ].filter(Boolean);
   return (
     <>
-      <p className="pointer-events-none fixed right-3 bottom-2 z-10 max-w-[calc(100%-1.5rem)] truncate rounded bg-bg/85 px-2 py-0.5 text-[11px] text-muted">
+      <p className="pointer-events-none fixed bottom-2 left-3 z-10 max-w-[calc(100%-11rem)] truncate rounded bg-bg/85 px-2 py-0.5 text-[11px] text-muted">
         <span className="sr-only">{t.status.label}: </span>
         <span className={STATUS_TONE[status]}>{label}</span>
         {parts.map((part) => (

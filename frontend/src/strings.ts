@@ -25,6 +25,7 @@ export const strings = {
     editorHint:
       'Tab insere uma tabulação. Esc e depois Tab para sair do campo.',
     loading: 'Carregando…',
+    report: 'Denunciar essa nota',
   },
   status: {
     label: 'Estado da nota',
@@ -62,6 +63,8 @@ export const strings = {
   },
   footer: {
     name: 'Laura Esteves',
+    tagline: 'Mais um site de extrema utilidade pública',
+    madeWith: 'Feito com ❤️ e ☕️ por',
     report: 'Denunciar uma nota',
     reportSubject: 'Denúncia de nota',
   },
