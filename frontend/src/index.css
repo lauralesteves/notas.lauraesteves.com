@@ -94,6 +94,12 @@ body {
   color: var(--color-cyan);
 }
 
+/* The URL field shows focus on its wrapper border (focus-within), not with a ring on the input. */
+.url-input:focus,
+.url-input:focus-visible {
+  outline: none;
+}
+
 .note-editor {
   caret-color: var(--color-cyan);
   outline: none;

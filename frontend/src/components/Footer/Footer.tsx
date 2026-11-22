@@ -1,21 +1,16 @@
 import { LAURA_URL } from '../../config';
+import { reportHref } from '../../lib/report';
 import { strings as t } from '../../strings';
 
-const REPORT_EMAIL = 'lauralesteves@gmail.com';
 const currentYear = new Date().getFullYear();
 
-function reportHref(): string {
-  const subject = encodeURIComponent(t.footer.reportSubject);
-  const body = encodeURIComponent('Endereço da nota: ');
-  return `mailto:${REPORT_EMAIL}?subject=${subject}&body=${body}`;
-}
-
-/** Same shape as the family footer (vaicorinthians.lauraesteves.com), plus the report link. */
+/** Same footer as tao.lauraesteves.com (fixed at the bottom), plus the report link on a third line. */
 export function Footer() {
   return (
-    <footer className="py-4 text-center text-sm text-text">
+    <footer className="fixed right-0 bottom-0 left-0 z-50 bg-bg/85 py-3 text-center text-sm text-white backdrop-blur-sm">
+      <p className="font-bold uppercase">{t.footer.tagline}</p>
       <p>
-        &copy; {currentYear} |{' '}
+        &copy; {currentYear} | {t.footer.madeWith}{' '}
         <a
           href={LAURA_URL}
           target="_blank"
@@ -25,8 +20,11 @@ export function Footer() {
           {t.footer.name}
         </a>
       </p>
-      <p className="mt-1 text-xs">
-        <a href={reportHref()} className="link text-muted">
+      <p>
+        <a
+          href={reportHref(t.footer.reportSubject)}
+          className="link text-muted"
+        >
           {t.footer.report}
         </a>
       </p>

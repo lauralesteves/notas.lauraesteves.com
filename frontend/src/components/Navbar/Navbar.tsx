@@ -8,7 +8,7 @@ export function Navbar() {
       aria-label="Principal"
       className="fixed top-0 right-0 left-0 z-50 bg-bg/80 backdrop-blur-sm"
     >
-      <div className="relative flex items-center px-6 py-4 pr-[100px]">
+      <div className="relative flex items-center px-6 py-3 pr-[100px]">
         <a
           href="/"
           className="gradient-text font-mono text-xl font-bold no-underline transition-opacity hover:opacity-80 md:text-2xl"
