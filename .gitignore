@@ -1,0 +1,11 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+.aws-sam/
+coverage/
+*.log
+.idea/
+.vscode/
