@@ -1,0 +1,20 @@
+{{.Subject}}
+Notas | notas.lauraesteves.com
+{{.Now}} · últimos 7 dias
+
+BANCO
+  Notas no banco:      {{.Total}} (expiram 15 dias após a última edição)
+  Editadas na semana:  {{.EditedWeek}}
+
+ÚLTIMAS 10 EDITADAS
+{{- if .Recent}}
+{{- range .Recent}}
+  {{.EditedAt}}  /{{.Path}}
+{{- end}}
+{{- else}}
+  Nenhuma nota editada nesta semana.
+{{- end}}
+
+--
+Notas: {{.SiteURL}}
+Enviado em {{.Now}} por {{.Host}}
