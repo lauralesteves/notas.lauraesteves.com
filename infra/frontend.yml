@@ -1,0 +1,238 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  notas.lauraesteves.com frontend: private S3 bucket behind CloudFront (OAC),
+  SPA rewrite function, /raw/* proxied to the HTTP API, and Route53 records.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: notas.lauraesteves.com
+    Description: Site domain. Also used as the bucket name.
+  ApiDomainName:
+    Type: String
+    Default: api.notas.lauraesteves.com
+    Description: Custom domain of the HTTP API (origin for /raw/*).
+  WebSocketDomainName:
+    Type: String
+    Default: ws.notas.lauraesteves.com
+    Description: Custom domain of the WebSocket API (allowed in the CSP).
+  CertificateArn:
+    Type: String
+    AllowedPattern: '^arn:aws:acm:us-east-1:\d{12}:certificate/.+$'
+    ConstraintDescription: Must be an ACM certificate ARN in us-east-1.
+    Description: ACM certificate in us-east-1 covering DomainName.
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: Route53 hosted zone that holds DomainName.
+
+Mappings:
+  Managed:
+    CachePolicy:
+      CachingOptimized: 658327ea-f89d-4fab-a63d-7e88639e58f6
+      CachingDisabled: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+    OriginRequestPolicy:
+      AllViewerExceptHostHeader: b689b0a8-53d0-40ab-baf2-68738e2966ac
+    CloudFront:
+      HostedZoneId: Z2FDTNDATAQYW2
+
+Resources:
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref DomainName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontOAC
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${SiteBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-oac'
+        Description: !Sub 'OAC for ${DomainName}'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # Every URI without a file extension is a note (or the home): serve the SPA.
+  # Note paths only allow [a-z0-9_-], so they never contain a dot.
+  RewriteFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub '${AWS::StackName}-spa-rewrite'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Rewrite extensionless URIs to /index.html
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+          var last = uri.substring(uri.lastIndexOf('/') + 1);
+
+          if (last.indexOf('.') === -1) {
+            request.uri = '/index.html';
+          }
+
+          return request;
+        }
+
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${AWS::StackName}-security-headers'
+        Comment: !Sub 'Security headers for ${DomainName}'
+        SecurityHeadersConfig:
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Preload: false
+            Override: true
+          ContentSecurityPolicy:
+            Override: true
+            ContentSecurityPolicy: !Sub >-
+              default-src 'self';
+              script-src 'self';
+              style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+              font-src 'self' https://fonts.gstatic.com;
+              img-src 'self' data:;
+              connect-src 'self' https://${ApiDomainName} wss://${WebSocketDomainName};
+              base-uri 'self';
+              form-action 'self';
+              frame-ancestors 'none';
+              object-src 'none'
+        CustomHeadersConfig:
+          Items:
+            - Header: Permissions-Policy
+              Value: camera=(), microphone=(), geolocation=(), interest-cohort=()
+              Override: true
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Ref DomainName
+        Aliases:
+          - !Ref DomainName
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_All
+        DefaultRootObject: index.html
+        Origins:
+          - Id: s3-site
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+          - Id: http-api
+            DomainName: !Ref ApiDomainName
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+              HTTPSPort: 443
+        DefaultCacheBehavior:
+          TargetOriginId: s3-site
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: !FindInMap [Managed, CachePolicy, CachingOptimized]
+          ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt RewriteFunction.FunctionMetadata.FunctionARN
+        CacheBehaviors:
+          # curl access: notas.lauraesteves.com/raw/<note> -> HTTP API, never cached.
+          - PathPattern: /raw/*
+            TargetOriginId: http-api
+            # allow-all (not redirect) so `curl notas.lauraesteves.com/raw/x` works without -L.
+            ViewerProtocolPolicy: allow-all
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD]
+            Compress: true
+            CachePolicyId: !FindInMap [Managed, CachePolicy, CachingDisabled]
+            OriginRequestPolicyId: !FindInMap [Managed, OriginRequestPolicy, AllViewerExceptHostHeader]
+            ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+        # Safety net for paths with a dot that are not files (e.g. /foo.bar):
+        # S3 answers 403 through OAC; serve the SPA, which normalizes the URL.
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 404
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 10
+
+  RecordA:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: !FindInMap [Managed, CloudFront, HostedZoneId]
+        EvaluateTargetHealth: false
+
+  RecordAAAA:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: !FindInMap [Managed, CloudFront, HostedZoneId]
+        EvaluateTargetHealth: false
+
+Outputs:
+  DistributionId:
+    Description: CloudFront distribution id (CLOUDFRONT_DISTRIBUTION_ID for deploys).
+    Value: !Ref Distribution
+  DistributionDomainName:
+    Description: CloudFront domain name.
+    Value: !GetAtt Distribution.DomainName
+  BucketName:
+    Description: S3 bucket with the built site.
+    Value: !Ref SiteBucket
