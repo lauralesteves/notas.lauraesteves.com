@@ -1,12 +1,17 @@
 package report
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"io"
+	"mime"
+	"mime/multipart"
+	"net/mail"
 	"strings"
 	"testing"
 	"time"
 
-	sestypes "github.com/aws/aws-sdk-go-v2/service/sesv2/types"
 	"github.com/lauralesteves/notas.lauraesteves.com/backend/internal/external/ses"
 	"github.com/lauralesteves/notas.lauraesteves.com/backend/internal/models"
 	"github.com/lauralesteves/notas.lauraesteves.com/backend/internal/repositories"
@@ -120,9 +125,61 @@ func TestSendBuildsEmailWithInlineAvatar(t *testing.T) {
 		t.Errorf("note body leaked into the email")
 	}
 
-	in := ses.BuildInput(e)
-	att := in.Content.Simple.Attachments
-	if len(att) != 1 || *att[0].ContentId != "cortex" || att[0].ContentDisposition != sestypes.AttachmentContentDispositionInline || *att[0].ContentType != "image/png" || len(att[0].RawContent) == 0 {
-		t.Errorf("attachments = %+v", att)
+	in, err := ses.BuildInput(e, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if in.Content.Simple != nil || in.Content.Raw == nil {
+		t.Fatalf("expected raw content, got %+v", in.Content)
+	}
+	assertInlineAvatar(t, in.Content.Raw.Data)
+}
+
+// assertInlineAvatar checks the avatar sits in a multipart/related next to the
+// HTML, which is what makes cid: references render in Gmail.
+func assertInlineAvatar(t *testing.T, raw []byte) {
+	t.Helper()
+	msg, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := msg.Header.Get("Subject"); got != "2026-11-23 Notas da Semana" {
+		t.Errorf("subject = %q", got)
+	}
+	mt, params, _ := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	if mt != "multipart/alternative" {
+		t.Fatalf("top content type = %q", mt)
+	}
+	alt := multipart.NewReader(msg.Body, params["boundary"])
+	if p, err := alt.NextPart(); err != nil || !strings.HasPrefix(p.Header.Get("Content-Type"), "text/plain") {
+		t.Fatalf("first part: %v %v", err, p)
+	}
+	p, err := alt.NextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mt, params, _ = mime.ParseMediaType(p.Header.Get("Content-Type"))
+	if mt != "multipart/related" {
+		t.Fatalf("second part = %q", mt)
+	}
+	rel := multipart.NewReader(p, params["boundary"])
+	html, err := rel.NextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(html)
+	if !strings.HasPrefix(html.Header.Get("Content-Type"), "text/html") || !strings.Contains(string(body), "cid:"+AvatarCID) {
+		t.Errorf("html part missing cid reference")
+	}
+	img, err := rel.NextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if img.Header.Get("Content-ID") != "<"+AvatarCID+">" || img.Header.Get("Content-Type") != "image/png" || !strings.HasPrefix(img.Header.Get("Content-Disposition"), "inline") {
+		t.Errorf("image headers = %v", img.Header)
+	}
+	data, _ := io.ReadAll(base64.NewDecoder(base64.StdEncoding, img))
+	if !bytes.Equal(data, Avatar) {
+		t.Errorf("avatar bytes differ: %d vs %d", len(data), len(Avatar))
 	}
 }
