@@ -18,9 +18,9 @@ import (
 
 const (
 	RecentLimit = 10
-	// Served by the notas frontend (frontend/public). Loaded by URL, not embedded:
+	// Served at avatar.lauraesteves.com. Loaded by URL, not embedded:
 	// Gmail lists any embedded image part as a "noname" attachment.
-	AvatarURL    = "https://notas.lauraesteves.com/cortex_bot_192.png"
+	AvatarURL    = "https://avatar.lauraesteves.com/cortex.webp"
 	reportWindow = 7 * 24 * time.Hour
 	senderName   = "Cortex"
 )

@@ -70,7 +70,7 @@ func TestRenderWithNotes(t *testing.T) {
 	}
 	for _, want := range []string{
 		`<title>Servidores | Notas da Semana: 2026-11-23</title>`,
-		`src="https://notas.lauraesteves.com/cortex_bot_192.png"`,
+		`src="https://avatar.lauraesteves.com/cortex.webp"`,
 		`>1.284</p>`,
 		`color:#00f0f9;">37</p>`,
 		`href="https://notas.lauraesteves.com/faculdade/calculo"`,
