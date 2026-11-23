@@ -56,7 +56,7 @@ func TestBuildWithNotes(t *testing.T) {
 	if data.Recent[0].Path != "nota-a" || data.Recent[0].EditedAt != "23/11 09:00" {
 		t.Errorf("first recent = %+v", data.Recent[0])
 	}
-	if data.Subject != "2026-11-23 Notas da Semana" || data.Now != "23/11/2026 09:00" {
+	if data.Subject != "Servidores | Notas da Semana: 2026-11-23" || data.Now != "23/11/2026 09:00" {
 		t.Errorf("subject %q, now %q", data.Subject, data.Now)
 	}
 }
@@ -69,7 +69,7 @@ func TestRenderWithNotes(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		`<title>2026-11-23 Notas da Semana</title>`,
+		`<title>Servidores | Notas da Semana: 2026-11-23</title>`,
 		`src="cid:cortex@lauraesteves.com"`,
 		`>1.284</p>`,
 		`color:#00f0f9;">37</p>`,
@@ -118,7 +118,7 @@ func TestSendBuildsEmailWithInlineAvatar(t *testing.T) {
 		t.Fatalf("sent %d", len(sender.sent))
 	}
 	e := sender.sent[0]
-	if e.From != "Cortex <cortex@lauraesteves.com>" || e.To[0] != "laura@example.com" || e.Subject != "2026-11-23 Notas da Semana" {
+	if e.From != "Cortex <cortex@lauraesteves.com>" || e.To[0] != "laura@example.com" || e.Subject != "Servidores | Notas da Semana: 2026-11-23" {
 		t.Errorf("email header = %q %v %q", e.From, e.To, e.Subject)
 	}
 	if strings.Contains(e.HTML, "segredo") || strings.Contains(e.Text, "segredo") {
@@ -143,7 +143,7 @@ func assertInlineAvatar(t *testing.T, raw []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := msg.Header.Get("Subject"); got != "2026-11-23 Notas da Semana" {
+	if got := msg.Header.Get("Subject"); got != "Servidores | Notas da Semana: 2026-11-23" {
 		t.Errorf("subject = %q", got)
 	}
 	mt, params, _ := mime.ParseMediaType(msg.Header.Get("Content-Type"))

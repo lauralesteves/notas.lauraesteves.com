@@ -115,7 +115,7 @@ func (s *Service) Build(ctx context.Context) (Data, error) {
 func NewData(now time.Time, total, edited int, siteURL, host string) Data {
 	local := now.In(Location)
 	return Data{
-		Subject:    local.Format("2006-01-02") + " Notas da Semana",
+		Subject:    "Servidores | Notas da Semana: " + local.Format("2006-01-02"),
 		Preview:    preview(total, edited),
 		AvatarSrc:  htmltemplate.URL("cid:" + AvatarCID),
 		Now:        local.Format("02/01/2006 15:04"),
