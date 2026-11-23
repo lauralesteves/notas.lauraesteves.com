@@ -131,6 +131,28 @@ func TestSaveEmptyBodyDeletes(t *testing.T) {
 	}
 }
 
+func TestSaveWhitespaceOnlyBodyDeletes(t *testing.T) {
+	for _, body := range []string{" ", "\n", "  \n\t\r\n  "} {
+		f := newNotesFixture()
+		f.save(t, SaveInput{Path: "foo", Body: "a"})
+		res := f.save(t, SaveInput{Path: "foo", Body: body, BaseVersion: 1})
+		if !res.Deleted || res.Note != nil {
+			t.Fatalf("body %q: got %+v", body, res)
+		}
+		if n, _ := f.repo.Get(context.Background(), "foo"); n != nil {
+			t.Fatalf("body %q: note still stored: %+v", body, n)
+		}
+	}
+}
+
+func TestSaveKeepsSurroundingWhitespace(t *testing.T) {
+	f := newNotesFixture()
+	res := f.save(t, SaveInput{Path: "foo", Body: "  a\n"})
+	if res.Deleted || res.Note.Body != "  a\n" {
+		t.Fatalf("got %+v", res)
+	}
+}
+
 func TestSaveEmptyBodyOnMissingNoteIsNoop(t *testing.T) {
 	f := newNotesFixture()
 	res := f.save(t, SaveInput{Path: "foo", Body: ""})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -98,7 +99,8 @@ func (s *notesService) Save(ctx context.Context, in SaveInput) (models.SaveResul
 		cond.BaseVersion = current.Version
 	}
 
-	if in.Body == "" {
+	// Whitespace-only counts as empty, so a cleared note does not linger.
+	if strings.TrimSpace(in.Body) == "" {
 		if current == nil {
 			return models.SaveResult{Path: in.Path, Deleted: true}, nil
 		}
