@@ -51,7 +51,7 @@ func BuildMIME(email Email, now time.Time) ([]byte, error) {
 		if err := writeQP(alt, "text/html", email.HTML); err != nil {
 			return nil, err
 		}
-		return buf.Bytes(), alt.Close()
+		return closeAndBytes(&buf, alt)
 	}
 
 	var relBuf bytes.Buffer
@@ -86,7 +86,16 @@ func BuildMIME(email Email, now time.Time) ([]byte, error) {
 	if _, err := w.Write(relBuf.Bytes()); err != nil {
 		return nil, err
 	}
-	return buf.Bytes(), alt.Close()
+	return closeAndBytes(&buf, alt)
+}
+
+// closeAndBytes writes the closing boundary before taking the bytes: in
+// `return buf.Bytes(), alt.Close()` the slice is taken first and misses it.
+func closeAndBytes(buf *bytes.Buffer, mw *multipart.Writer) ([]byte, error) {
+	if err := mw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func writeHeader(buf *bytes.Buffer, key, value string) {
