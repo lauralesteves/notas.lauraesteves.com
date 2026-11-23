@@ -11,9 +11,9 @@ import (
 )
 
 // InlineImage is referenced from the HTML body as cid:<ContentID>.
+// ContentID should be addr-spec shaped (id@domain), per RFC 2392.
 type InlineImage struct {
 	ContentID   string
-	FileName    string
 	ContentType string
 	Data        []byte
 }

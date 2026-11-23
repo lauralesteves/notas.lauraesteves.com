@@ -17,11 +17,10 @@ import (
 )
 
 const (
-	RecentLimit    = 10
-	AvatarCID      = "cortex"
-	reportWindow   = 7 * 24 * time.Hour
-	senderName     = "Cortex"
-	avatarFileName = "cortex.png"
+	RecentLimit  = 10
+	AvatarCID    = "cortex@lauraesteves.com"
+	reportWindow = 7 * 24 * time.Hour
+	senderName   = "Cortex"
 )
 
 //go:embed templates/weekly_report.html.tmpl
@@ -165,7 +164,6 @@ func (s *Service) BuildEmail(data Data) (ses.Email, error) {
 		Text:    text,
 		Inline: []ses.InlineImage{{
 			ContentID:   AvatarCID,
-			FileName:    avatarFileName,
 			ContentType: "image/png",
 			Data:        Avatar,
 		}},
