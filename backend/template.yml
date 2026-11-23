@@ -440,7 +440,9 @@ Resources:
             TableName: !Ref NotesTable
         - Statement:
             - Effect: Allow
-              Action: ses:SendEmail
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
               Resource: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/lauraesteves.com
       Events:
         WeeklySchedule:
