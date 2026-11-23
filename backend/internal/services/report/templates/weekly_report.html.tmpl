@@ -1,12 +1,12 @@
 {{- /*
   Relatório semanal do notas.lauraesteves.com.
   Visual copiado do health report do server-apps (server-apps/scripts/health-report.sh):
-  mesma paleta, card de 600px, faixa ciano->roxo no topo e o avatar do Cortex inline (cid).
+  mesma paleta, card de 600px, faixa ciano->roxo no topo e o avatar do Cortex (por URL).
 
   Dados (WeeklyReport):
     Subject      string           "Servidores | Notas da Semana: 2026-11-23"
     Preview      string           texto escondido que aparece na lista de e-mails
-    AvatarSrc    string           "cid:cortex@lauraesteves.com" em produção, caminho do arquivo no preview local
+    AvatarSrc    string           "https://notas.lauraesteves.com/cortex_bot_192.png" em produção, caminho do arquivo no preview local
     Now          string           "23/11/2026 09:00"
     Total        int              notas no banco
     EditedWeek   int              notas editadas nos últimos 7 dias

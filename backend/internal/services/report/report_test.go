@@ -3,10 +3,10 @@ package report
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"io"
 	"mime"
 	"mime/multipart"
+	"mime/quotedprintable"
 	"net/mail"
 	"strings"
 	"testing"
@@ -70,7 +70,7 @@ func TestRenderWithNotes(t *testing.T) {
 	}
 	for _, want := range []string{
 		`<title>Servidores | Notas da Semana: 2026-11-23</title>`,
-		`src="cid:cortex@lauraesteves.com"`,
+		`src="https://notas.lauraesteves.com/cortex_bot_192.png"`,
 		`>1.284</p>`,
 		`color:#00f0f9;">37</p>`,
 		`href="https://notas.lauraesteves.com/faculdade/calculo"`,
@@ -107,7 +107,7 @@ func TestRenderEmpty(t *testing.T) {
 	}
 }
 
-func TestSendBuildsEmailWithInlineAvatar(t *testing.T) {
+func TestSendBuildsEmailWithAvatarByURL(t *testing.T) {
 	repo := repositories.NewMemoryNotesRepository()
 	seed(t, repo, "foo", now.Add(-time.Hour))
 	sender := &captureSender{}
@@ -132,12 +132,12 @@ func TestSendBuildsEmailWithInlineAvatar(t *testing.T) {
 	if in.Content.Simple != nil || in.Content.Raw == nil {
 		t.Fatalf("expected raw content, got %+v", in.Content)
 	}
-	assertInlineAvatar(t, in.Content.Raw.Data)
+	assertNoEmbeddedImage(t, in.Content.Raw.Data)
 }
 
-// assertInlineAvatar checks the avatar sits in a multipart/related next to the
-// HTML, which is what makes cid: references render in Gmail.
-func assertInlineAvatar(t *testing.T, raw []byte) {
+// assertNoEmbeddedImage checks the message is only text + HTML, with the avatar
+// loaded by URL: Gmail lists any embedded image part as a "noname" attachment.
+func assertNoEmbeddedImage(t *testing.T, raw []byte) {
 	t.Helper()
 	msg, err := mail.ReadMessage(bytes.NewReader(raw))
 	if err != nil {
@@ -151,35 +151,23 @@ func assertInlineAvatar(t *testing.T, raw []byte) {
 		t.Fatalf("top content type = %q", mt)
 	}
 	alt := multipart.NewReader(msg.Body, params["boundary"])
-	if p, err := alt.NextPart(); err != nil || !strings.HasPrefix(p.Header.Get("Content-Type"), "text/plain") {
-		t.Fatalf("first part: %v %v", err, p)
+	var types []string
+	for {
+		p, err := alt.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		mt, _, _ := mime.ParseMediaType(p.Header.Get("Content-Type"))
+		types = append(types, mt)
+		body, _ := io.ReadAll(quotedprintable.NewReader(p))
+		if mt == "text/html" && !strings.Contains(string(body), `src="`+AvatarURL+`"`) {
+			t.Errorf("html part missing the avatar URL")
+		}
 	}
-	p, err := alt.NextPart()
-	if err != nil {
-		t.Fatal(err)
-	}
-	mt, params, _ = mime.ParseMediaType(p.Header.Get("Content-Type"))
-	if mt != "multipart/related" {
-		t.Fatalf("second part = %q", mt)
-	}
-	rel := multipart.NewReader(p, params["boundary"])
-	html, err := rel.NextPart()
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ := io.ReadAll(html)
-	if !strings.HasPrefix(html.Header.Get("Content-Type"), "text/html") || !strings.Contains(string(body), "cid:"+AvatarCID) {
-		t.Errorf("html part missing cid reference")
-	}
-	img, err := rel.NextPart()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if img.Header.Get("Content-ID") != "<"+AvatarCID+">" || img.Header.Get("Content-Type") != "image/png" || img.Header.Get("Content-Disposition") != "inline" {
-		t.Errorf("image headers = %v", img.Header)
-	}
-	data, _ := io.ReadAll(base64.NewDecoder(base64.StdEncoding, img))
-	if !bytes.Equal(data, Avatar) {
-		t.Errorf("avatar bytes differ: %d vs %d", len(data), len(Avatar))
+	if strings.Join(types, ",") != "text/plain,text/html" {
+		t.Errorf("parts = %v, want text/plain,text/html", types)
 	}
 }

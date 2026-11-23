@@ -17,8 +17,10 @@ import (
 )
 
 const (
-	RecentLimit  = 10
-	AvatarCID    = "cortex@lauraesteves.com"
+	RecentLimit = 10
+	// Served by the notas frontend (frontend/public). Loaded by URL, not embedded:
+	// Gmail lists any embedded image part as a "noname" attachment.
+	AvatarURL    = "https://notas.lauraesteves.com/cortex_bot_192.png"
 	reportWindow = 7 * 24 * time.Hour
 	senderName   = "Cortex"
 )
@@ -29,6 +31,8 @@ var htmlSource string
 //go:embed templates/weekly_report.txt.tmpl
 var textSource string
 
+// Avatar is only written next to the local preview (cmd/preview-email).
+//
 //go:embed templates/cortex_bot_192.png
 var Avatar []byte
 
@@ -117,7 +121,7 @@ func NewData(now time.Time, total, edited int, siteURL, host string) Data {
 	return Data{
 		Subject:    "Servidores | Notas da Semana: " + local.Format("2006-01-02"),
 		Preview:    preview(total, edited),
-		AvatarSrc:  htmltemplate.URL("cid:" + AvatarCID),
+		AvatarSrc:  htmltemplate.URL(AvatarURL),
 		Now:        local.Format("02/01/2006 15:04"),
 		Total:      Count(total),
 		EditedWeek: Count(edited),
@@ -150,7 +154,7 @@ func Render(data Data) (string, string, error) {
 	return html.String(), text.String(), nil
 }
 
-// BuildEmail renders the report into an email with the avatar attached inline.
+// BuildEmail renders the report into an email (HTML + text, avatar by URL).
 func (s *Service) BuildEmail(data Data) (ses.Email, error) {
 	html, text, err := Render(data)
 	if err != nil {
@@ -162,11 +166,6 @@ func (s *Service) BuildEmail(data Data) (ses.Email, error) {
 		Subject: data.Subject,
 		HTML:    html,
 		Text:    text,
-		Inline: []ses.InlineImage{{
-			ContentID:   AvatarCID,
-			ContentType: "image/png",
-			Data:        Avatar,
-		}},
 	}, nil
 }
 
