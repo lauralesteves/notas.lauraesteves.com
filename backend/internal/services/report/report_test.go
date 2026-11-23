@@ -70,7 +70,7 @@ func TestRenderWithNotes(t *testing.T) {
 	}
 	for _, want := range []string{
 		`<title>2026-11-23 Notas da Semana</title>`,
-		`src="cid:cortex"`,
+		`src="cid:cortex@lauraesteves.com"`,
 		`>1.284</p>`,
 		`color:#00f0f9;">37</p>`,
 		`href="https://notas.lauraesteves.com/faculdade/calculo"`,
@@ -175,7 +175,7 @@ func assertInlineAvatar(t *testing.T, raw []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if img.Header.Get("Content-ID") != "<"+AvatarCID+">" || img.Header.Get("Content-Type") != "image/png" || !strings.HasPrefix(img.Header.Get("Content-Disposition"), "inline") {
+	if img.Header.Get("Content-ID") != "<"+AvatarCID+">" || img.Header.Get("Content-Type") != "image/png" || img.Header.Get("Content-Disposition") != "inline" {
 		t.Errorf("image headers = %v", img.Header)
 	}
 	data, _ := io.ReadAll(base64.NewDecoder(base64.StdEncoding, img))

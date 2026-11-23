@@ -19,7 +19,7 @@ import (
 //	├── text/plain
 //	└── multipart/related   (only when there are inline images)
 //	    ├── text/html
-//	    └── image/* (Content-ID: <id>, inline)
+//	    └── image/* (Content-ID: <id>, inline, no filename)
 //
 // Inline images must live in a multipart/related next to the HTML, otherwise
 // clients like Gmail do not resolve cid: references and show a broken image.
@@ -64,7 +64,9 @@ func BuildMIME(email Email, now time.Time) ([]byte, error) {
 		h.Set("Content-Type", img.ContentType)
 		h.Set("Content-Transfer-Encoding", "base64")
 		h.Set("Content-ID", "<"+img.ContentID+">")
-		h.Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": img.FileName}))
+		// No filename: Gmail lists named parts as attachments even when the
+		// HTML references them by cid.
+		h.Set("Content-Disposition", "inline")
 		w, err := rel.CreatePart(h)
 		if err != nil {
 			return nil, err
@@ -76,7 +78,7 @@ func BuildMIME(email Email, now time.Time) ([]byte, error) {
 	}
 
 	h := textproto.MIMEHeader{}
-	h.Set("Content-Type", `multipart/related; type="text/html"; boundary="`+rel.Boundary()+`"`)
+	h.Set("Content-Type", `multipart/related; boundary="`+rel.Boundary()+`"`)
 	w, err := alt.CreatePart(h)
 	if err != nil {
 		return nil, err
