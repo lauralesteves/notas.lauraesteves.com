@@ -19,6 +19,7 @@ export const strings = {
     curlWrite: 'escrever (sobrescreve)',
     curlPipe: 'ou mandar a saída de um comando',
     curlFile: 'arquivo.txt',
+    curlInstall: 'ou instalar os comandos nota e nota-add (bash ou zsh)',
   },
   note: {
     editorLabel: 'Texto da nota',

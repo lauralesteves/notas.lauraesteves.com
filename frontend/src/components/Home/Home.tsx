@@ -1,5 +1,5 @@
 import { type FormEvent, useId, useState } from 'react';
-import { RAW_BASE_URL } from '../../config';
+import { INSTALL_URL, RAW_BASE_URL } from '../../config';
 import { normalizePath, validatePath } from '../../lib/path';
 import { strings as t } from '../../strings';
 import { Footer } from '../Footer/Footer';
@@ -107,6 +107,9 @@ export function Home() {
               {'\n\n'}
               <span className="text-muted"># {t.home.curlPipe}</span>
               {'\n'}date | curl -X PUT --data-binary @- {example}
+              {'\n\n'}
+              <span className="text-muted"># {t.home.curlInstall}</span>
+              {'\n'}curl -fsSL {INSTALL_URL} | sh
             </code>
           </pre>
         </section>

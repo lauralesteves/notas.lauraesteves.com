@@ -26,6 +26,9 @@ export const RAW_BASE_URL = import.meta.env.PROD
   ? 'https://notas.lauraesteves.com/raw'
   : `${API_URL}/raw`;
 
+/** Installer for the `nota` and `nota-add` shell commands. Always production: the commands it installs talk to production. */
+export const INSTALL_URL = 'https://notas.lauraesteves.com/install.sh';
+
 export const REPO_URL =
   'https://github.com/lauralesteves/notas.lauraesteves.com';
 export const LAURA_URL = 'https://lauraesteves.com';
