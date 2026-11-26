@@ -5,12 +5,16 @@ Bloco de notas colaborativo sem login, inspirado no [dontpad](https://dontpad.co
 - Salva sozinho quando você para de digitar.
 - Quem estiver com a mesma URL aberta vê as mudanças em tempo real.
 - Subpáginas: `notas.lauraesteves.com/faculdade/calculo`.
-- Pelo terminal: `curl notas.lauraesteves.com/raw/qualquer-coisa`, ou instale os comandos `nota` e `nota-add` com `curl -fsSL https://notas.lauraesteves.com/install.sh | sh` (bash ou zsh).
+- Pelo terminal: com `curl` ou com os comandos `nota` e `nota-add`. Veja [Pelo terminal](#pelo-terminal).
 - As notas somem 15 dias depois da última edição.
 - Toda nota é pública para quem souber a URL. Não guarde senhas aqui.
 
 ## Sumário
 
+- [Pelo terminal](#pelo-terminal)
+  - [Instalar](#instalar)
+  - [Usar](#usar)
+  - [Só com curl](#só-com-curl)
 - [Stack](#stack)
 - [Arquitetura](#arquitetura)
   - [Visão geral](#visão-geral)
@@ -28,6 +32,73 @@ Bloco de notas colaborativo sem login, inspirado no [dontpad](https://dontpad.co
 - [CI/CD](#cicd)
 - [Deploy](#deploy)
 - [Contrato](#contrato)
+
+## Pelo terminal
+
+### Instalar
+
+```sh
+curl -fsSL https://notas.lauraesteves.com/install.sh | sh
+```
+
+O script detecta o shell pelo `$SHELL` e grava as funções `nota` e `nota-add` no arquivo de inicialização dele:
+
+| Shell | Arquivo |
+|-|-|
+| zsh | `~/.zshrc` (ou `$ZDOTDIR/.zshrc`) |
+| bash no Linux | `~/.bashrc` |
+| bash no macOS | `~/.bash_profile` |
+
+Para usar no terminal que já está aberto, rode `source` nesse arquivo (por exemplo, `source ~/.bashrc`) ou abra um terminal novo. Para escolher o shell em vez de detectar, passe o nome dele:
+
+```sh
+curl -fsSL https://notas.lauraesteves.com/install.sh | sh -s -- zsh
+```
+
+- As funções ficam num bloco entre marcadores. Rodar o instalador de novo troca o bloco em vez de duplicar, então é assim que se atualiza.
+- Usa bash e zsh? Instale nos dois: cada shell tem o próprio arquivo e recebe o próprio bloco.
+- Antes de mexer, o script salva uma cópia em `<arquivo>.notas.bak`. Se encontrar um `nota` ou `nota-add` escrito à mão fora do bloco, avisa a linha. O bloco fica no final e prevalece, mas vale apagar a definição antiga.
+- Fish e outros shells não são suportados.
+- Precisa de `curl`.
+
+### Usar
+
+```sh
+# mostra a nota
+nota netbook
+
+# adiciona uma linha no final (cria a nota se não existir)
+nota-add netbook "comprar café"
+
+# adiciona a saída de um comando
+lsblk -f | nota-add netbook
+
+# cola várias linhas: rode sem texto, cole e termine com Ctrl+D
+nota-add netbook
+```
+
+- Entre aspas duplas, o shell ainda interpreta `$`, `` ` ``, `!` e `"`. Para texto com esses caracteres, use a entrada (pipe ou colar + Ctrl+D), que chega sem nenhuma alteração.
+- O `nota-add` lê a nota, junta o texto novo e grava tudo de volta. Se a leitura falhar (rede ou erro do servidor), ele não grava nada, para não apagar o que já estava lá.
+- A gravação é last-write-wins: se alguém editar a mesma nota no navegador entre a leitura e a gravação, essa edição se perde.
+- O nome da nota segue as regras de caminho (`[a-z0-9_-]`, até 5 níveis com `/`): `nota faculdade/calculo`.
+- Para apontar para outro servidor (por exemplo, o backend local), defina `NOTAS_URL` antes: `NOTAS_URL=http://localhost:8080/raw nota teste`.
+
+### Só com curl
+
+Sem instalar nada, pelo `/raw` ([contrato](docs/api.md)):
+
+```sh
+# ler
+curl https://notas.lauraesteves.com/raw/netbook
+
+# escrever (sobrescreve a nota inteira)
+curl -X PUT --data-binary @arquivo.txt https://notas.lauraesteves.com/raw/netbook
+
+# mandar a saída de um comando (também sobrescreve)
+date | curl -X PUT --data-binary @- https://notas.lauraesteves.com/raw/netbook
+```
+
+O caminho `/netbook`, sem o `/raw`, devolve a página HTML do site, não o texto da nota. Um `PUT` com corpo vazio apaga a nota.
 
 ## Stack
 
