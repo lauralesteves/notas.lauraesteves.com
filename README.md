@@ -5,7 +5,7 @@ Bloco de notas colaborativo sem login, inspirado no [dontpad](https://dontpad.co
 - Salva sozinho quando você para de digitar.
 - Quem estiver com a mesma URL aberta vê as mudanças em tempo real.
 - Subpáginas: `notas.lauraesteves.com/faculdade/calculo`.
-- Pelo terminal: `curl notas.lauraesteves.com/raw/qualquer-coisa`.
+- Pelo terminal: `curl notas.lauraesteves.com/raw/qualquer-coisa`, ou instale os comandos `nota` e `nota-add` com `curl -fsSL https://notas.lauraesteves.com/install.sh | sh` (bash ou zsh).
 - As notas somem 15 dias depois da última edição.
 - Toda nota é pública para quem souber a URL. Não guarde senhas aqui.
 
