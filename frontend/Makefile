@@ -34,6 +34,7 @@ deploy: build
 		--exclude "ai.txt" \
 		--exclude "humans.txt" \
 		--exclude "og.webp" \
+		--exclude "install.sh" \
 		--exclude ".well-known/*"
 	aws s3 sync dist/ s3://$(S3_BUCKET) \
 		--delete \
@@ -46,6 +47,7 @@ deploy: build
 		--include "ai.txt" \
 		--include "humans.txt" \
 		--include "og.webp" \
+		--include "install.sh" \
 		--include ".well-known/*"
 	@echo "Invalidating CloudFront cache..."
 	aws cloudfront create-invalidation \
